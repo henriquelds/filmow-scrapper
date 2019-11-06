@@ -6,27 +6,26 @@ from ..items import UserItem
 class FilmowSpider(scrapy.Spider):
     name = "filmow"
     root = "https://filmow.com/"
+
+
     start_urls = [
         'https://filmow.com/usuarios/',
     ]
 
     def parse_aval_page(self, response):
         user = response.meta['user_item']
-        user['ratings'] = []
-
+        
         for aval in response.css('li.span2.movie_list_item'):
             rating = aval.css('div.user-rating span::attr(title)').extract_first().split()[1]
             movie_tag = aval.css('span.wrapper a::attr(data-movie-pk)').extract_first()
             user['ratings'].append((movie_tag,rating))
         #end for
         
-        next_page = None #response.css('#next-page::attr(href)').extract_first()
+        next_page = response.css('#next-page::attr(href)').extract_first()
         if next_page is not None:
-            next_page = response.urljoin(next_page)
-            print("next page aval: ", next_page)
-            #yield etc
+            yield response.follow(next_page, meta={'user_item' : user}, callback=self.parse_aval_page)
         else:
-            return user
+            yield user
     #end parse aval
 
     def parse_user(self, response):
@@ -36,6 +35,7 @@ class FilmowSpider(scrapy.Spider):
         user = UserItem()
         user['name'] = name
         user['username'] = username
+        user['ratings'] = []
 
         aval_url = urljoin("https://filmow.com/usuario/", username+"/filmes/avaliacoes")
         yield scrapy.Request(aval_url, meta={'user_item' : user}, callback=self.parse_aval_page)

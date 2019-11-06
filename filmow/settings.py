@@ -14,7 +14,8 @@ BOT_NAME = 'filmow'
 SPIDER_MODULES = ['filmow.spiders']
 NEWSPIDER_MODULE = 'filmow.spiders'
 
-
+LOG_LEVEL = 'INFO'
+#CLOSESPIDER_ITEMCOUNT = 15
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'filmow (+http://www.yourdomain.com)'
 
