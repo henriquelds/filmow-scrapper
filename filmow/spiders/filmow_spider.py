@@ -18,7 +18,7 @@ class FilmowSpider(scrapy.Spider):
         for aval in response.css('li.span2.movie_list_item'):
             rating = aval.css('div.user-rating span::attr(title)').extract_first().split()[1]
             movie_tag = aval.css('span.wrapper a::attr(data-movie-pk)').extract_first()
-            user['ratings'].append((movie_tag,rating))
+            user['ratings'].append((user['username'],movie_tag,rating))
         #end for
         
         next_page = response.css('#next-page::attr(href)').extract_first()
