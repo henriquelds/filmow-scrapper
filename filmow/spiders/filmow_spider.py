@@ -3,8 +3,11 @@ from urllib.parse import urljoin
 from ..items import UserItem
 
 
-class FilmowSpider(scrapy.Spider):
-    name = "filmow"
+#class MovieSpider(scrapy.Spider):
+
+
+class UserSpider(scrapy.Spider):
+    name = "filmow-user"
     root = "https://filmow.com/"
 
 
@@ -15,6 +18,9 @@ class FilmowSpider(scrapy.Spider):
     def parse_aval_page(self, response):
         user = response.meta['user_item']
         
+        #print( response.css('div#my-filmow-stats-movies') )
+        print( response.css('div.sidebar-section.sidebar-my-filmow').get() )
+
         for aval in response.css('li.span2.movie_list_item'):
             rating = aval.css('div.user-rating span::attr(title)').extract_first().split()[1]
             movie_tag = aval.css('span.wrapper a::attr(data-movie-pk)').extract_first()
