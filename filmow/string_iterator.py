@@ -1,3 +1,5 @@
+## Credits to: https://hakibenita.com/fast-load-data-python-postgresql ##
+
 from typing import Iterator, Optional, Dict, Any
 import io
 
