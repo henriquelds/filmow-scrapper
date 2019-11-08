@@ -16,8 +16,10 @@ class FilmowItem(scrapy.Item):
 class UserItem(scrapy.Item):
 	name = scrapy.Field()
 	username = scrapy.Field()
+	age = scrapy.Field()
+	city = scrapy.Field()
 	ratings = scrapy.Field()
-
+	seen_count = scrapy.Field()
 	def __repr__(self):
 		return repr({"username" : self['username']})
 	
@@ -27,7 +29,10 @@ class UserItem(scrapy.Item):
 #	rating = scrapy.Field()
 
 class MovieItem(scrapy.Item):
-	tag = scrapy.Field()
+	movie_tag = scrapy.Field()
 	title = scrapy.Field()
 	year = scrapy.Field()
+	runtime = scrapy.Field()
 	genres = scrapy.Field()
+	directors = scrapy.Field()
+	countries = scrapy.Field()
