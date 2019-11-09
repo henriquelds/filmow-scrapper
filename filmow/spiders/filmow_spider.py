@@ -50,7 +50,7 @@ class MovieSpider(scrapy.Spider):
             desc = movie+"ficha-tecnica/"
             url = urljoin(self.root, desc)
             yield scrapy.Request(url, callback=self.parse_movie, meta={"page":cur_page})
-        next_page = None#response.css('#next-page::attr(href)').extract_first()
+        next_page = response.css('#next-page::attr(href)').extract_first()
         if next_page is not None:
             next_page = response.urljoin(next_page)
             #print("movies next page: ", next_page)
