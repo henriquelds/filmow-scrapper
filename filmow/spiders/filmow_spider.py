@@ -8,7 +8,7 @@ class MovieSpider(scrapy.Spider):
     root = "https://filmow.com/"
 
     start_urls = [
-        'https://filmow.com/filmes-todos/',
+        'https://filmow.com/filmes-todos/?pagina=1',
     ]
 
     def parse_movie(self, response):
@@ -38,14 +38,18 @@ class MovieSpider(scrapy.Spider):
         movie['runtime'] = runtime
         movie['genres'] = genres
         movie['countries'] = countries
+        movie['page'] = response.meta['page']
 
         yield movie
 
     def parse(self, response):
+        title = response.css('title::text').extract_first() 
+        pg_text = find_between(title, "Página", "|")
+        cur_page = int(pg_text) if len(pg_text) > 0 else 1
         for movie in response.css('li.span2.movie_list_item a.cover.tip-movie::attr(href)').extract():
             desc = movie+"ficha-tecnica/"
             url = urljoin(self.root, desc)
-            yield scrapy.Request(url, callback=self.parse_movie)
+            yield scrapy.Request(url, callback=self.parse_movie, meta={"page":cur_page})
         next_page = None#response.css('#next-page::attr(href)').extract_first()
         if next_page is not None:
             next_page = response.urljoin(next_page)
@@ -61,7 +65,7 @@ class UserSpider(scrapy.Spider):
 
 
     start_urls = [
-        'https://filmow.com/usuarios/',
+        'https://filmow.com/usuarios/?pagina=1',
     ]
 
     def parse_aval_page(self, response):
@@ -108,8 +112,9 @@ class UserSpider(scrapy.Spider):
         user['city'] = city
         user['ratings'] = []
         user['seen_count'] = seen_count
+        user['page'] = response.meta['page']
 
-        if seen_count > 0 or True:
+        if seen_count > 0:
             aval_url = urljoin("https://filmow.com/usuario/", username+"/filmes/avaliacoes")
             yield scrapy.Request(aval_url, meta={'user_item' : user}, callback=self.parse_aval_page)
         else:
@@ -117,14 +122,25 @@ class UserSpider(scrapy.Spider):
     #end parse_user
 
     def parse(self, response):
+        title = response.css('title::text').extract_first() 
+        pg_text = find_between(title, "Página", "|")
+        cur_page = int(pg_text) if len(pg_text) > 0 else 1
         for user in response.css('li.span1.people-list-item.users-list-item.tip-user a.name::attr(href)').extract():
             url = urljoin(self.root, user)
-            yield scrapy.Request(url, callback=self.parse_user)
+            yield scrapy.Request(url, callback=self.parse_user, meta={"page":cur_page})
         next_page = response.css('#next-page::attr(href)').extract_first()
         if next_page is not None:
             next_page = response.urljoin(next_page)
-            print("users next page: ", next_page)
+            #print("users next page: ", next_page)
             yield scrapy.Request(next_page, callback=self.parse)
     #end parse
 
 #end UserSpider
+
+def find_between( s, first, last ):
+    try:
+        start = s.index( first ) + len( first )
+        end = s.index( last, start )
+        return s[start:end]
+    except ValueError:
+        return ""

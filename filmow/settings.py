@@ -11,11 +11,14 @@
 
 BOT_NAME = 'filmow'
 
+#either movies-start, users-start or continue, to inform pipeline which tables to drop
+MODE = "movies-start"
+
 SPIDER_MODULES = ['filmow.spiders']
 NEWSPIDER_MODULE = 'filmow.spiders'
 
 LOG_LEVEL = 'INFO'
-CLOSESPIDER_ITEMCOUNT = 2
+#CLOSESPIDER_ITEMCOUNT = 20
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'filmow (+http://www.yourdomain.com)'
 

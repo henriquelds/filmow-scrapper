@@ -5,35 +5,43 @@
 # Don't forget to add your pipeline to the ITEM_PIPELINES setting
 # See: https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 import psycopg2 as pg
-import pycountry as pc
 from filmow.string_iterator import StringIteratorIO, clean_csv_value
+from filmow.items import MovieItem,UserItem
+from scrapy.exceptions import DropItem
 
 class FilmowPipeline(object):
 
-	def __init__(self):
+	def __init__(self, mode):
 		self.create_connection()
-		self.create_tables()
+		self.create_tables(mode)
+
+	@classmethod
+	def from_crawler(cls, crawler):
+		return cls(mode=crawler.settings.get('MODE'))
 
 	def create_connection(self):
 		self.conn = pg.connect(user = "filmow_scrapper", password="filmow", host="127.0.0.1", port="5432", database="filmow")
 		#database filmow user filmow_scrapper psswd filmow
 		self.curr = self.conn.cursor()
 
-	def create_tables(self):
-		#comment these 3 lines while running in production
-		self.curr.execute(""" DROP TABLE IF EXISTS "movie_to_genres" """)
-		self.curr.execute(""" DROP TABLE IF EXISTS "movie_to_countries" """)	
-		self.curr.execute(""" DROP TABLE IF EXISTS "ratings" """)
-		self.curr.execute(""" DROP TABLE IF EXISTS "users" """)
-		self.curr.execute(""" DROP TABLE IF EXISTS "movies" """)
-		self.curr.execute(""" DROP TABLE IF EXISTS "genres" """)
+	def create_tables(self, mode):
+		#comment these lines while running in production
+		if mode == "movies-start":
+			self.curr.execute(""" DROP TABLE IF EXISTS "movie_to_genres" """)
+			self.curr.execute(""" DROP TABLE IF EXISTS "movie_to_countries" """)	
+			self.curr.execute(""" DROP TABLE IF EXISTS "movie_to_directors" """)
+			self.curr.execute(""" DROP TABLE IF EXISTS "movies" """)
+			self.curr.execute(""" DROP TABLE IF EXISTS "genres" """)
+		elif mode == "users-start":	
+			self.curr.execute(""" DROP TABLE IF EXISTS "ratings" """)
+			self.curr.execute(""" DROP TABLE IF EXISTS "users" """)
 		
 
 		self.curr.execute(""" CREATE TABLE IF NOT EXISTS "movies" ( "movie_tag"	NUMERIC NOT NULL UNIQUE,\
 			"year"	INTEGER,\
-			"genres"	TEXT,\
 			"title" VARCHAR(100) NOT NULL,\
 			"runtime" INTEGER,\
+			"page" INTEGER NOT NULL,\
 			PRIMARY KEY("movie_tag"))""")
 
 		self.curr.execute(""" CREATE TABLE IF NOT EXISTS "users" ("username"	VARCHAR(50) NOT NULL UNIQUE,\
@@ -41,6 +49,7 @@ class FilmowPipeline(object):
 			"age" INTEGER,\
 			"city" VARCHAR(30),\
 			"seen_count" INTEGER CHECK( seen_count > 0),\
+			"page" INTEGER NOT NULL,\
 			"id" SERIAL PRIMARY KEY)""")
 
 		self.curr.execute(""" CREATE TABLE IF NOT EXISTS "ratings" ("user_id"	INTEGER NOT NULL,\
@@ -53,10 +62,15 @@ class FilmowPipeline(object):
 		self.curr.execute(""" CREATE TABLE IF NOT EXISTS "genres" ("id"	SERIAL PRIMARY KEY,\
 			"genre"	VARCHAR(30) UNIQUE)""")
 
-		genres = open("filmow/genres.txt").read().splitlines()
-		for gen in genres:
-			self.curr.execute(""" INSERT INTO genres(genre) VALUES (%s)""", (gen,))
-		#end for
+		if mode == "movies-start":
+			genres = open("filmow/genres.txt").read().splitlines()
+			for gen in genres:
+				try:
+					self.curr.execute(""" INSERT INTO genres(genre) VALUES (%s)""", (gen,))
+				except pg.errors.UniqueViolation as e:
+					pass
+			#end for
+		#end if
 
 		self.curr.execute(""" CREATE TABLE IF NOT EXISTS "movie_to_genres" ("movie_tag"	NUMERIC NOT NULL,\
 			"genre_id"	INTEGER NOT NULL,\
@@ -67,35 +81,77 @@ class FilmowPipeline(object):
 			ON UPDATE NO ACTION ON DELETE NO ACTION)""")
 
 		self.curr.execute(""" CREATE TABLE IF NOT EXISTS "movie_to_countries" ("movie_tag"	NUMERIC NOT NULL,\
-			"Country"	VARCHAR(50) NOT NULL,\
-			PRIMARY KEY("movie_tag","Country"),\
+			"country"	VARCHAR(50) NOT NULL,\
+			PRIMARY KEY("movie_tag","country"),\
+			CONSTRAINT movietag_fk FOREIGN KEY (movie_tag) REFERENCES movies (movie_tag) MATCH SIMPLE\
+			ON UPDATE NO ACTION ON DELETE NO ACTION)""")
+
+		self.curr.execute(""" CREATE TABLE IF NOT EXISTS "movie_to_directors" ("movie_tag"	NUMERIC NOT NULL,\
+			"director"	VARCHAR(50) NOT NULL,\
+			PRIMARY KEY("movie_tag","director"),\
 			CONSTRAINT movietag_fk FOREIGN KEY (movie_tag) REFERENCES movies (movie_tag) MATCH SIMPLE\
 			ON UPDATE NO ACTION ON DELETE NO ACTION)""")
 
 		self.conn.commit()
 
 	def process_item(self, item, spider):
-		if isinstance(item, UserItem):
-			if item['ratings']:
-				user_id = self.store_user(item['username'], item['name'], item['age'], item['city'], item['seen_count'])
-				print("User {username} {user_id} : {rats} ratings ".format(username=item['username'], user_id=user_id,rats=len(item['ratings'] )))
-				ratings = [(user_id,r[1],r[2]) for r in item['ratings']]
-
-				self.store_ratings(ratings)
-				#for rat in item['ratings']:
-				#	self.store_rating(item['username'],rat[0], rat[1])
-			else:
-				print("User {n} : 0 ratings".format(n=item['username']))
-			#end if
-		elif isinstance(item, MovieItem):
-			pass
+		if isinstance(item,UserItem):
+			return self.handle_user(item)
+		if isinstance(item, MovieItem):
+			return self.handle_movie(item)
 		return item
     #end process_item
 
-	def store_user(self, username, name, age, city, seen_count):
+	def handle_user(self, item):
+		if item['ratings']:
+			user_id = self.store_user(item)
+			print("User {username}: {rats} ratings ".format(username=item['username'], rats=len(item['ratings'] )))
+			ratings = [(user_id,r[1],r[2]) for r in item['ratings']]
+			self.store_ratings(ratings)
+		else:
+			raise DropItem("User {n} : 0 ratings".format(n=item['username']))
+		#end if
+		return item
+	#end handle_user
+
+	def handle_movie(self, item):
+		movie_tag = self.store_movie(item)
+		print("Movie {tag}: {title}".format(tag=movie_tag,title=item['title']))
+		# since there are few genres, directors and countries we chose to insert them inside a for-loop instead of bulk-insertion with curr.copy_from
+		for director in item['directors']:
+			self.curr.execute(""" INSERT INTO movie_to_directors(movie_tag,director) VALUES (%s,%s) """,\
+			(movie_tag,director))
+		#end for
+		for country in item['countries']:
+			self.curr.execute(""" INSERT INTO movie_to_countries(movie_tag,country) VALUES (%s,%s) """,\
+			(movie_tag,country))
+		#end for
+		for genre in item['genres']:
+			self.curr.execute(""" SELECT id FROM genres WHERE genre LIKE %s;""", (genre,))
+			genre_id = self.curr.fetchone()[0]
+			self.curr.execute(""" INSERT INTO movie_to_genres(movie_tag,genre_id) VALUES (%s,%s) """,\
+			(movie_tag,genre_id))
+		#end for
+		self.conn.commit()
+		return item
+	#end handle_user
+
+	def store_movie(self, movie):
+		try:
+			self.curr.execute(""" INSERT INTO movies(movie_tag, year, title, runtime,page) VALUES (%s,%s,%s,%s,%s)""",\
+			 (movie['movie_tag'],movie['year'],movie['title'],movie['runtime'],movie['page']))
+		except pg.IntegrityError as e:
+			print("Movie already in the DB")
+		finally:
+			self.conn.commit()
+		return movie['movie_tag']
+	#end store_movie
+
+	def store_user(self, user):
 		id = -1
 		try:
-			self.curr.execute(""" INSERT INTO users(username, name, age, city, seen_count) VALUES (%s,%s,%s,%s,%s) RETURNING id""", (username,name,age,city,seen_count))
+			self.curr.execute(""" INSERT INTO users(username, name, age, city, seen_count,page) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",\
+			 (user['username'],user['name'],user['age'],user['city'],user['seen_count'],user['page']))
 			id = self.curr.fetchone()[0]
 		except pg.IntegrityError as e:
 			print("User already in the DB")
@@ -108,13 +164,15 @@ class FilmowPipeline(object):
 
 	def store_ratings(self, ratings):
 		try:
-			f = self.create_ratings_iterator(ratings)
+			f = self.create_string_iterator(ratings)
 			self.curr.copy_from(f, 'ratings', columns=('user_id', 'movie_tag', 'rating'), sep="|")
 			#self.curr.execute(""" INSERT INTO ratings(username, movie_tag, rating) VALUES (?,?,?)""", (username,movie_tag,float(rat)))
 		except pg.IntegrityError as e:
 			print("Rating already in the DB")
+			pass
 		finally:
 			self.conn.commit()
 
-	def create_ratings_iterator(self, ratings):
-		return StringIteratorIO( ('|'.join(map(clean_csv_value, (rat[0],rat[1],rat[2]))) + '\n' for rat in ratings ) )
+	# l must be a list of tuples (3-uples)
+	def create_string_iterator(self, l):
+		return StringIteratorIO( ('|'.join(map(clean_csv_value, (i[0],i[1],i[2]))) + '\n' for i in l ) )
