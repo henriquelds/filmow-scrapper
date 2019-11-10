@@ -12,7 +12,7 @@
 BOT_NAME = 'filmow'
 
 #either movies-start, users-start or continue, to inform pipeline which tables to drop
-MODE = "movies-start"
+MODE = "users-start"
 
 SPIDER_MODULES = ['filmow.spiders']
 NEWSPIDER_MODULE = 'filmow.spiders'

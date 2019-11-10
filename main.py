@@ -9,8 +9,8 @@ runner = CrawlerRunner(settings)
 
 @defer.inlineCallbacks
 def crawl():
-    #yield runner.crawl(UserSpider)
-    yield runner.crawl(MovieSpider)
+    yield runner.crawl(UserSpider)
+    #yield runner.crawl(MovieSpider)
     reactor.stop()
 
 crawl()

@@ -8,6 +8,7 @@ import psycopg2 as pg
 from filmow.string_iterator import StringIteratorIO, clean_csv_value
 from filmow.items import MovieItem,UserItem
 from scrapy.exceptions import DropItem
+import sys
 
 class FilmowPipeline(object):
 
@@ -169,7 +170,6 @@ class FilmowPipeline(object):
 			#self.curr.execute(""" INSERT INTO ratings(username, movie_tag, rating) VALUES (?,?,?)""", (username,movie_tag,float(rat)))
 		except pg.IntegrityError as e:
 			print("Rating already in the DB")
-			pass
 		finally:
 			self.conn.commit()
 
