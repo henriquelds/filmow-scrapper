@@ -26,7 +26,6 @@ class FilmowPipeline(object):
 		self.curr = self.conn.cursor()
 
 	def create_tables(self, mode):
-		#comment these lines while running in production
 		if mode == "movies-start":
 			self.curr.execute(""" DROP TABLE IF EXISTS "movie_to_genres" """)
 			self.curr.execute(""" DROP TABLE IF EXISTS "movie_to_countries" """)	
@@ -43,6 +42,7 @@ class FilmowPipeline(object):
 			"title" VARCHAR(100) NOT NULL,\
 			"runtime" INTEGER,\
 			"page" INTEGER NOT NULL,\
+			"movie_id" SERIAL,\
 			PRIMARY KEY("movie_tag"))""")
 
 		self.curr.execute(""" CREATE TABLE IF NOT EXISTS "users" ("username"	VARCHAR(50) NOT NULL UNIQUE,\
@@ -107,7 +107,7 @@ class FilmowPipeline(object):
 		if item['ratings']:
 			user_id = self.store_user(item)
 			print("User {username}: {rats} ratings ".format(username=item['username'], rats=len(item['ratings'] )))
-			ratings = [(user_id,r[1],r[2]) for r in item['ratings']]
+			ratings = [(user_id,t[1],r) for t,r in item['ratings'].items()]
 			self.store_ratings(ratings)
 		else:
 			raise DropItem("User {n} : 0 ratings".format(n=item['username']))

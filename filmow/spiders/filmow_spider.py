@@ -1,7 +1,71 @@
 import scrapy
 from urllib.parse import urljoin
 from ..items import UserItem, MovieItem
+from scrapy.utils.project import get_project_settings
 
+
+class SingleUserSpider(scrapy.Spider):
+    name = "filmow-singleuser"
+    root = "https://filmow.com/usuario/"
+    username = get_project_settings().get('SINGLEUSER_USERNAME')
+    start_urls = [
+        root+username,
+    ]
+
+    def parse(self, response):
+        title = str(response.css('title::text').extract())
+        username = title[title.find("(")+1:title.find(")")].strip()
+        name = response.xpath("//meta[@property='og:title']/@content").extract_first().strip()
+        info = response.css('div.span9 div::text').extract_first()
+        city, age = None, None
+        seen_count = int(response.css('span.number::text').extract_first())
+        if 'years' in info:
+            index = info.find('years')
+            age = int(info[:index-1].strip())
+            start = info.rfind('years')+len('years')+1
+            end = max(info.rfind('-'),info.rfind(','))
+            if end != -1:
+                city = info[start:end].strip()
+        elif max(info.rfind(','),info.rfind('-')) > 0:
+            end = max(info.rfind(','),info.rfind('-'))
+            city = info[:end].strip()
+
+
+        city = None if city is not None and len(city) < 1 else city
+        age = None if age is not None and age < 1 else age
+        
+
+        user = UserItem()
+        user['name'] = name
+        user['username'] = username
+        user['age'] = age
+        user['city'] = city
+        user['ratings'] = {}
+        user['seen_count'] = seen_count
+        user['page'] = -1 #to indicate the user didnt come from the userspider
+
+        if seen_count > 0:
+            aval_url = urljoin("https://filmow.com/usuario/", username+"/filmes/avaliacoes")
+            yield scrapy.Request(aval_url, meta={'user_item' : user}, callback=self.parse_aval_page)
+        else:
+            yield user
+    #end parse
+
+    def parse_aval_page(self, response):
+        user = response.meta['user_item']
+        print(user)
+        for aval in response.css('li.span2.movie_list_item'):
+            rating = aval.css('div.user-rating span::attr(title)').extract_first().split()[1]
+            movie_tag = int(aval.css('span.wrapper a::attr(data-movie-pk)').extract_first())
+            user['ratings'][(user['username'],movie_tag)] = rating
+        #end for
+        
+        next_page = response.css('#next-page::attr(href)').extract_first()
+        if next_page is not None:
+            yield response.follow(next_page, meta={'user_item' : user}, callback=self.parse_aval_page)
+        else:
+            yield user
+    #end parse aval
 
 class MovieSpider(scrapy.Spider):
     name = "filmow-movie"
@@ -74,7 +138,7 @@ class UserSpider(scrapy.Spider):
         for aval in response.css('li.span2.movie_list_item'):
             rating = aval.css('div.user-rating span::attr(title)').extract_first().split()[1]
             movie_tag = int(aval.css('span.wrapper a::attr(data-movie-pk)').extract_first())
-            user['ratings'].append((user['username'],movie_tag,rating))
+            user['ratings'][(user['username'],movie_tag)] = rating
         #end for
         
         next_page = response.css('#next-page::attr(href)').extract_first()
@@ -103,14 +167,14 @@ class UserSpider(scrapy.Spider):
             city = info[:end].strip()
 
         city = None if city is not None and len(city) < 1 else city
-        age = None if age is not None and len(age) < 1 else age
+        age = None if age is not None and age < 1 else age
 
         user = UserItem()
         user['name'] = name
         user['username'] = username
         user['age'] = age
         user['city'] = city
-        user['ratings'] = []
+        user['ratings'] = {}
         user['seen_count'] = seen_count
         user['page'] = response.meta['page']
 

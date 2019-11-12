@@ -11,14 +11,16 @@
 
 BOT_NAME = 'filmow'
 
-#either movies-start, users-start or continue, to inform pipeline which tables to drop
-MODE = "users-start"
+#either movies-start or users-start to drop existing respective tables, use any other string to not drop any table
+MODE = "singleuser"
+#username for singleuser mode
+SINGLEUSER_USERNAME = "heinrique"
 
 SPIDER_MODULES = ['filmow.spiders']
 NEWSPIDER_MODULE = 'filmow.spiders'
 
 LOG_LEVEL = 'INFO'
-#CLOSESPIDER_ITEMCOUNT = 20
+CLOSESPIDER_ITEMCOUNT = 100000
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'filmow (+http://www.yourdomain.com)'
 
@@ -26,7 +28,7 @@ LOG_LEVEL = 'INFO'
 ROBOTSTXT_OBEY = True
 
 # Configure maximum concurrent requests performed by Scrapy (default: 16)
-#CONCURRENT_REQUESTS = 32
+CONCURRENT_REQUESTS = 32
 
 # Configure a delay for requests for the same website (default: 0)
 # See https://docs.scrapy.org/en/latest/topics/settings.html#download-delay
